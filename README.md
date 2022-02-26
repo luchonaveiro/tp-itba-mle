@@ -1,23 +1,21 @@
 # **TP Final Machine Learning Engineering**
 
 
-![flujo de trabajo de ejemplo](https://github.com/luchonaveiro/tp-itba-ml/actions/workflows/deploy_s3.yml/badge.svg)
+![flujo de trabajo de ejemplo](https://github.com/luchonaveiro/tp-itba-mle/actions/workflows/deploy_s3.yml/badge.svg)
 
 The objective of the following project is to build an ETL capable of processing the [Airlines Delay and Cancellation Data from 2009-2018](https://www.kaggle.com/yuanyuwendymu/airline-delay-and-cancellation-data-2009-2018?select=2009.csv), to detect the anomalies on the average of the daily departure delay for each airport.
 
-The ETL is developed using Apache Airflow which extracts the raw data from S3; process it, applies an ARIMA model, and stores the data on a database created on an RDS instance; where Apache Superset is connected to visualize the results. A scalable infrastructire is deployed to enable all this:
-- implementation of a [*Managed Workflows for Apache Airflow* environment (MWAA)](https://aws.amazon.com/managed-workflows-for-apache-airflow/), where the model will run to detect the airport's departure delya anomalies. To detect an anomaly, an [ARIMA](https://www.statsmodels.org/devel/generated/statsmodels.tsa.arima.model.ARIMA.html) model is used, and the threshold to split a normal observation of an anomaly, is a confidence interval of th 80%, calculated by the same ARIMA model.
+The ETL is developed using Apache Airflow which extracts the raw data from S3; process it, applies an ARIMA model, and stores the data on a database created on an RDS instance; where Apache Superset is connected to visualize the results. A scalable infrastructire is deployed to enable teh solution:
+- implementation of a [*Managed Workflows for Apache Airflow* environment (MWAA)](https://aws.amazon.com/managed-workflows-for-apache-airflow/), where the model will run to detect the airport's departure delya anomalies. To detect an anomaly, an [ARIMA](https://www.statsmodels.org/devel/generated/statsmodels.tsa.arima.model.ARIMA.html) model is used, and the threshold to split a normal observation of an anomaly, is a 80% confidence interval, calculated by the same ARIMA model.
 - deployment of a [PostgreSQL RDS instance](https://aws.amazon.com/rds/), where the daily summarized values are going to be stored.
-- deployment of [Apache Superset](https://superset.apache.org/), which connects to the database created on the RDS instance and generates a dahsboard to visualize:
+- deployment of [Apache Superset](https://superset.apache.org/), which we will connect to the database created on the RDS instance and generates a dahsboard to visualize:
     - the number of daily flights of each airport, indicating the days considered as an anomaly regarding the departure delay
     - the average departure delay of each airport, together with the expected value and the 80% CI returned by the ARIMA model
 
 
 ## **Airports Data**
 
-AGREGAR LOS COMANDOS PARA DESCARGAR DE KAGGLE Y SUBIR A S3
-
-As I comented previously, the data refers to the airlines Ddelay and cancellation flights from 2009-2018, and once downloaded, I upload them on `com.lucianonaveiro.itba.tp.airport.data` S3 bucket.
+As I comented previously, the data refers to the airlines delay and cancellation flights from 2009-2018, and once downloaded, I upload them on `com.lucianonaveiro.itba.tp.airport.data` S3 bucket.
 
 After uploading them, I deploy all the infrastructure
 
@@ -31,9 +29,10 @@ First I create some S3 buckets, and copy my local files to AWS:
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-S3 \
-  --template-file infraestructura/cloudformation/01_s3.yaml
+  --template-file cloudformation/01_s3.yaml
 
 $ aws s3 cp --recursive airflow/dags s3://airflow-itba-tp.lucianonaveiro/dags/
+
 $ aws s3 cp airflow/requirements/requirements.txt s3://airflow-itba-tp.lucianonaveiro/requirements.txt
 
 ```
@@ -43,7 +42,7 @@ Afer this, I execute the template that builds the VPC where all the services and
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-VPC \
-  --template-file infraestructura/cloudformation/02_vpc.yaml \
+  --template-file cloudformation/02_vpc.yaml \
   --capabilities CAPABILITY_IAM
 ```
 
@@ -52,23 +51,23 @@ Once the VPC is created, I deploy both the MWAA and Apache Superset. For the lat
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-AIRFLOW \
-  --template-file infraestructura/cloudformation/03_managed_airflow.yaml \
+  --template-file cloudformation/03_managed_airflow.yaml \
   --capabilities CAPABILITY_IAM
 
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-SUPERSET \
-  --template-file infraestructura/cloudformation/04_superset.yaml \
+  --template-file cloudformation/04_superset.yaml \
   --s3-bucket com.lucianonaveiro.itba.tp.cloudformation \
   --s3-prefix superset \
   --capabilities CAPABILITY_IAM
 ```
 
-Once the stacks finished creating, I deploy the RDS instance. This instance is not available from the public internet: only MWAA, Apache Superset and an EC2 instance I deploy to run the `db/init.sql` script (by using the `UserData` on the CloudFormation template, to create the `airport_daily_summary` table inside the RDS instance), have access to it.
+Once all tthe stacks finish creating, I deploy the RDS instance. This instance is not available from the public internet: only MWAA, Apache Superset and an EC2 instance I deploy to run the `db/init.sql` script (by using the `UserData` on the CloudFormation template, to create the `airport_daily_summary` table inside the RDS instance), have access to it.
 
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-RDS \
-  --template-file infraestructura/cloudformation/05_rds.yaml \
+  --template-file cloudformation/05_rds.yaml \
   --capabilities CAPABILITY_IAM
 ```
 
@@ -83,7 +82,7 @@ Just to visualize it, this is the whole infrastruture created by the CloudFormat
 
 
 ## **Apache Airflow**
-The first thing to do when MWAA is running, is to create the connection to the RDS instance, under the name of `airports_db`.
+The first thing to do when MWAA is running, is to create the connection to the RDS instance, under the name of `airports_db`, the host value we get it from CloudFormation outputs (from `TP-ITBA-RDS` stack), user and password are both postgres, port is 5432.
 
 ![image](assets/airflow_db_connection.png)
 
@@ -136,7 +135,7 @@ Once that the DAG ran for all the airports for all the years, storing the summar
 
 ![image](assets/superset_db_connection.png)
 
-When the connection is created, I can define a dataset pointing to the `airport_daily_summary` table created on the RDS instance. While creating the dataset, i am going to define 2 new dimensions `date` (is the same `date` as the DB, but in timestamp) and `dep_delay_anomaly_label` (is just a map `dep_delay_anomaly` to visualize it clearly on the dashabord)
+When the connection is created, I can define a dataset pointing to the `airport_daily_summary` table created on the RDS instance. While creating the dataset, i am going to define 2 new dimensions `date` (is the same `date` as the DB, but in timestamp) and `dep_delay_anomaly_label` (is just a map from `dep_delay_anomaly` to visualize it clearly on the dashabord)
 
 ![image](assets/superset_dataset_creation.png)
 ![image](assets/superset_dataset_creation_2.png)
@@ -175,214 +174,10 @@ To correctly implement this, I create an IAM User with an attached policy to be 
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-GHA-IAM \
-  --template-file infraestructura/cloudformation/06_gha_iam.yaml \
+  --template-file cloudformation/06_gha_iam.yaml \
   --capabilities CAPABILITY_IAM
 ```
 
 On the outputs pane of this stack, both the `ACCESS_KEY_ID` and the `SECRET_ACCESS_KEY` can be found. These two values are necessary to create the *Secrets* on GitHub Actions settings
 
 ![image](assets/github_actions.png)
-
-
-
-
-
-----------
-
-
-
-El objetivo del siguiente trabajo es detectar las anomalias de las demoras de salidas de los vuelos diarios de cada aeropuerto para los [siguientes datos](https://www.kaggle.com/yuanyuwendymu/airline-delay-and-cancellation-data-2009-2018?select=2009.csv). 
-Estos datos describen las demoras y cancelaciones de distintos aeropuertos desde el 2009 al 2018.
-Para lograrlo, se desarrolla un ETL en Apache Airflow que extrae los datos desde S3, los procesa y los guarda en una instancia de RDS a la que se conecta Apache Superset para visualizar los resultados. Para realizar todo esto, se despliega una infraestructura escalable donde:
-- se implementa un ambiente de *Managed Apache Airflow* donde va a correr el modelo que detecta las anomalias dentro de los promedios diarios de las demoras de salidas para cada año y aeropuerto. Para distinguir entre un dia normal y un dia anomalo, se usa un modelo [ARIMA](https://www.statsmodels.org/devel/generated/statsmodels.tsa.arima.model.ARIMA.html) con un intervalo de confianza del 80%, por lo que si un dia, el promedio de las demoras de salidas esta por fuera del intervalo, se considera como un dia anomalo.
-- se levanta una instancia de RDS de PostgreSQL para guardar los datos diarios umarizados.
-- se despliega Apache Superset, que se conecta a la instancia de RDS levantada y se genera un dashboard para visualizar:
-    - la cantidad de vuelos diarios de cada aeropuerto, marcando los dias considerados anomalos.
-    - el promedio diario de demora de salida de cada aeropuerto, junto con el valor esperado y un intervalo de confianza del 80% generado por el modelo ARIMA, para entender los valores anomalos.
-
-## **Datos de los Aeropuertos**
-Como comente previamente, los datos se refieren a las demoras y cancelaciones de distintos aeropuertos desde el 2009 al 2018.
-Los datos a utilizar se encuentran en el siguiente sitio de [Kaggle](https://www.kaggle.com/yuanyuwendymu/airline-delay-and-cancellation-data-2009-2018?select=2009.csv), donde los descargo y los subo al bucket `com.lucianonaveiro.itba.tp.airport.data` de S3.
-
-Una vez que tengo los datos en ese bucket de S3, levanto toda la infraestructura para resolver el problema.
-
-## **Infraestructura en AWS**
-Primero creo algunos buckets en S3, y copio los archivos de mi computadora a AWS. Los buckets que creo son los siguientes:
-- `airflow-itba-tp.lucianonaveiro`: donde se van a guardar los DAGs y archivo `requirements.txt` con las librerias necesarias para correrlos
-- `com.lucianonaveiro.itba.tp.cloudformation`: donde guardo algunos templates que superan los 50kb
-- `com.lucianonaveiro.itba.tp.airport.plots`: donde guardo los graficos que genera el ETL en Apache Airflow.  
-
-```
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-S3 \
-  --template-file infraestructura/cloudformation/01_s3.yaml
-
-$ aws s3 cp --recursive airflow/dags s3://airflow-itba-tp.lucianonaveiro/dags/
-$ aws s3 cp airflow/requirements.txt s3://airflow-itba-tp.lucianonaveiro/requirements.txt
-
-```
-
-Luego ejecuto el `yaml` que crea la VPC donde van a correr todos los servicios y recursos que voy a crear en este trabajo:
-
-```
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-VPC \
-  --template-file infraestructura/cloudformation/02_vpc.yaml \
-  --capabilities CAPABILITY_IAM
-```
-
-Una vez creada la VPC, puedo levantar tanto el MWAA como Apache Superset, para desplegar Apache Superset me baso en el siguiente [Quick Start Reference Deployment](https://aws-quickstart.github.io/quickstart-apache-superset/):
-
-```
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-AIRFLOW \
-  --template-file infraestructura/cloudformation/03_managed_airflow.yaml \
-  --capabilities CAPABILITY_IAM
-
-$ aws s3 cp infraestructura/cloudformation/04_superset.yaml \
-  s3://com.lucianonaveiro.itba.tp.cloudformation/vpc_rds_airflow_superset.yaml
-
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-SUPERSET \
-  --template-file infraestructura/cloudformation/04_superset.yaml \
-  --s3-bucket com.lucianonaveiro.itba.tp.cloudformation \
-  --s3-prefix superset \
-  --capabilities CAPABILITY_IAM
-```
-
-Una vez que terminaron de desplegarse, creo la instancia de RDS. Esta instancia no esta disonible desde la internet publica, y solo tienen acceso MWAA, Apache Superset, y una instancia de EC2 que voy a utilizar para correr un script para crear la base de datos dentro de la instancia (eso esta dentro del `UserData` en el archivo `yaml`)
-
-```
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-RDS \
-  --template-file infraestructura/cloudformation/05_rds.yaml \
-  --capabilities CAPABILITY_IAM
-```
-
-Una vez que este todo levantado, me dirigo a CloudFormation dentro de la Consola de AWS, y busco la URL de Apache Airflow, la URL de Apache Superset, y la URL de la instancia de RDS (que voy a conectar tanto en Apache Airflow como en Apache Superset)
-
-PONER PRINT DE LOS OUTPUTS DE CLOUDFORMATION
-
-Luego de ejecutar todos estos comandos, CloudFormation nos crea los siguientes recursos en AWS
-
-PONER DIAGRAMA DE LA INFRAESTRUCTURA
-
-## **Apache Airflow**
-Lo primero que hago una vez levantado MWAA, es crear la conexion a la instancia de RDS con el nombre de `airports_db`, ya que el codigo del DAG busca esa conexion
-
-PONER PRINT DE LA CREACION DE LA CONEXION A LA DB
-
-Una vez creada la conexion, ya se puede prender el DAG, que tiene un schedule anual, y un backfill desde 2009 para correr el ETL para todos los años presentes en los datos. 
-
-El DAG se encarga de descargar los datos del bucket `com.lucianonaveiro.itba.tp.airport.data`, resumirlos diariamente para cada aeropuerto, correr un modelo ARIMA para ajustar un modelo sobre los promedios de demora de salida diarios, pudiendo detectar los dias con valores distintos a lo esperado, guardar los resultados en la instancia de RDS, y generar 2 graficos y guardarlos en el bucket `com.lucianonaveiro.itba.tp.airport.plots` de S3:
-- cantidad de vuelos diarios por año y aeropuerto, marcando los dias considerados anomalos.
-- las predicciones e intervalos de confianza del 80% vs los valores reales, para entender la decision del modelo a la hora de marcar un dia como anomalo.
-
-Aca se pueden ver los dos graficos para el año XXXX y el aeropuerto XXX, donde se ve claramente como las anomalias se encuentran fuera del intervalo de confianza generado por el modelo ARIMA
-
-PONER 2 GRAFICOS DE ALGUN AÑO Y AEROPUERTO
-
-Es importante remarcar que en caso de ejecutar dos veces algun año desde Apache Airflow, la data no se duplica ya que la excepcion de `IntegrityError` esta manejada en el DAG y no duplica datos ni rompe la ejecucion.
-
-## **Modelo ARIMA**
-Como mencione previamente, para separar entre un dia anomalo y un dia normal, ajusto un modelo ARIMA de los tiempos de demora promedio para cada año y cada aeropuerto, y si el valor observado se encuentra por fuera del intervalo de confianza del 80% que devuelve el modelo, lo considero como un dia anomalo.
-
-PONER DESCRIPCION PIOLA DEL ARIMA
-
-Es importante mencionar que el modelo ARIMA depende de tres parametros: `p`, `d` y `q`, donde:
-- `p`: orden del componente autorregresivo del modelo
-- `d`: orden del componente integrado del modelo
-- `q`: orden del componente de la media movil del modelo
-
-Para encontrar los valores optimos para cada año y aeropuerto, implemente un *Grid Search* donde recorro distintas combinaciones de valores, y elijo el que minimiza el error. La particularidad de estos modelos de series de tiempo, es que 
-
-## **Apache Superset**
-Una vez que corrio todo el DAG, guardando los datos diarios sumarizados en la base de datos creada dentro de la instancia de RDS, para todos los años de 2009 a 2018 para todos los aeropuertos, ingreso a Apache Superset y lo conecto a esa base de datos.
-
-PONER PRINT DE LA CONEXION A LA DB
-
-Teniendo la conexion creada, se puede crear el dashboard que replica los mismos graficos que se guardaron en el ETL en S3, pero de una manera mas dinamica, pudiendo filtrar el aeropuerto y las fechas. 
-
-PONER VIDEO O PRINTS DE TODOS LOS PASOS
-
-Habiendo creado el dashbaord, podemos filtrar el año XXXX y el aeropuerto XXX, y vemos el mismo grafico que se guardaron en la seccion de *Apache Airflow*.
-
-## **CI/CD**
-Tambien se agrego un *CI/CD* mediante GitHub Actions (el workflow llamando `deploy_s3.yml`), que en cada push o merge?? (probar esto) al main branch, se suben los DAGs y el archivo requirements.txt a S3. Para poder implementar esto, se crea un usuario y se le agrega una policy especifica para poder subir archivos al bucket `airflow-itba-tp.lucianonaveiro` de S3: 
-
-```
-$ aws cloudformation deploy \
-  --stack-name TP-ITBA-GHA-IAM \
-  --template-file infraestructura/cloudformation/06_gha_iam.yaml \
-  --capabilities CAPABILITY_IAM
-```
-
-En los outputs del stack en CloudFormation, se encuentran el `ACCESS_KEY_ID` y `SECRET_ACCESS_KEY` que uso para crear las crear los *Secrets* en GitHub.
-
-PONER PRINT DE COMO SETEO LAS CREDENCIALES EN GITHUB
-
------
--1) aws s3 sync modelo/data s3://com.lucianonaveiro.itba.tp.airport.data
-
-0) breve explicacion de lo que se quiere lograr
-
-1) download data from kaggle
-
-2) upload data to S3
-    aws s3 sync raw/ s3://BUCKET/tp
-
-3) execute cloudformation for airflow bucket
-    aws cloudformation deploy \
-    --stack-name TP-ITBA-S3 \
-    --template-file infraestructura/cloudformation/01_s3.yaml ---- 30s
-
-    aws s3 cp infraestructura/cloudformation/04_superset.yaml s3://com.lucianonaveiro.itba.tp.cloudformation/vpc_rds_airflow_superset.yaml
-
-4) upload dags and requirements.txt
-    aws s3 cp --recursive airflow/dags s3://airflow-itba-tp.lucianonaveiro/dags/
-    aws s3 cp airflow/requirements.txt s3://airflow-itba-tp.lucianonaveiro/requirements.txt
-
-5) execute cloudformation for the rest of the things
-    aws cloudformation deploy \
-    --stack-name TP-ITBA-VPC \
-    --template-file infraestructura/cloudformation/02_vpc.yaml \
-    --capabilities CAPABILITY_IAM \
-    --parameters ParameterKey=EnvironmentName,ParameterValue=TP-ITBA ParameterKey=ClusterName,ParameterValue=supersetOnAWS (NO) ---- 5min
-
-    aws cloudformation deploy \
-    --stack-name TP-ITBA-AIRFLOW \
-    --template-file infraestructura/cloudformation/03_managed_airflow.yaml \
-    --capabilities CAPABILITY_IAM \
-    --parameters ParameterKey=EnvironmentName,ParameterValue=TP-ITBA ParameterKey=ClusterName,ParameterValue=supersetOnAWS (NO) ---- 30min
-
-    aws cloudformation deploy \
-    --stack-name TP-ITBA-SUPERSET \
-    --template-file infraestructura/cloudformation/04_superset.yaml \
-    --s3-bucket com.lucianonaveiro.itba.tp.cloudformation \
-    --s3-prefix superset \
-    --capabilities CAPABILITY_IAM \
-    --parameters ParameterKey=EnvironmentName,ParameterValue=TP-ITBA ParameterKey=ClusterName,ParameterValue=supersetOnAWS (NO) ---- 7min
-
-    aws cloudformation deploy \
-    --stack-name TP-ITBA-RDS \
-    --template-file infraestructura/cloudformation/05_rds.yaml \
-    --capabilities CAPABILITY_IAM \
-    --parameters ParameterKey=EnvironmentName,ParameterValue=TP-ITBA ParameterKey=ClusterName,ParameterValue=supersetOnAWS (NO) --- 8min
-
-6) add connection to RDS on airflow (agregar print tambien)
-
-7) prints de los graficos que guarda en S3
-
-8) contar que agregue un github actions para que deploye automaticamente cualquier cambio en dags o requirements.txt
-
-9) explicacion del ARIMA y de que esta haciendo
-
-10) add connection to RDS on superset (agregar print tambien)
-
-11) creo tabla como dataset en superset
-
-12) prints de como se arman los plots para el dashbaord
-
-13) prints de los dashboards creados en superset
-
-14) diagrama final de toda la infraestructura
