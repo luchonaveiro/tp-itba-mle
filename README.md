@@ -175,7 +175,7 @@ To correctly implement this, I create an IAM User with an attached policy to be 
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-GHA-IAM \
   --template-file cloudformation/06_gha_iam.yaml \
-  --capabilities CAPABILITY_IAM
+  --capabilities CAPABILITY_NAMED_IAM
 ```
 
 On the outputs pane of this stack, both the `ACCESS_KEY_ID` and the `SECRET_ACCESS_KEY` can be found. These two values are necessary to create the *Secrets* on GitHub Actions settings
