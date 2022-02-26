@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: TP-ITBA
+  ClusterName:
+    Type: String
+    Default: 'supersetOnAWS'
+    Description: Name of the Amazon ECS cluster to deploy Apache Superset.
+    
+Resources:
+  #####################################################################################################################
+  # EC2 Security Groups, EC2 Instance and RDS DB
+  #####################################################################################################################
+
+  EC2InstanceSecurityGroup: 
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow ports 22, 8080 and 8088
+        VpcId: !ImportValue VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8088
+          ToPort: 8088
+          CidrIp: 0.0.0.0/0
+        Tags:
+          - Key: Name
+            Value: !Sub ${EnvironmentName} EC2 Security Group
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow port 5432 from EC2InstanceSecurityGroup and SecurityGroup (Aorflow) and DefaultNetwork (Superset)
+      VpcId: !ImportValue VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId: !Ref EC2InstanceSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId: !ImportValue SecurityGroup
+      - IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId: !ImportValue DefaultNetwork
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} RDS Security Group
+
+  EC2InitRDSInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AirportsDBInstance
+    Properties:
+      AvailabilityZone: us-east-1a
+      ImageId: ami-04505e74c0741db8d
+      InstanceType: t2.micro
+      KeyName: ec2-ubuntu-instance.pem
+      SubnetId: !ImportValue PublicSubnet1
+      SecurityGroupIds:
+        - { "Fn::GetAtt" : ["EC2InstanceSecurityGroup", "GroupId"] }
+      UserData:
+        Fn::Base64: 
+          !Sub |
+          #!/bin/bash
+          sudo apt-get update
+          sudo apt-get install -y git 
+          sudo apt install -y postgresql-client
+          sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+          git clone https://github.com/luchonaveiro/tp-itba-mle.git
+          cd tp-itba-mle
+          PGPASSWORD=postgres psql -h ${AirportsDBInstance.Endpoint.Address} -U postgres -d postgres -f db/init.sql
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} EC2 Instance to execute init.sql on RDS DB
+
+  AirportsDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: database-1
+      DBInstanceClass: db.t2.micro
+      Engine: postgres
+      EngineVersion: 12.5
+      MasterUsername: postgres
+      MasterUserPassword: postgres
+      AvailabilityZone: us-east-1a
+      DBSubnetGroupName: !ImportValue DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      PubliclyAccessible: false
+      AllocatedStorage: 20
+      BackupRetentionPeriod: 0
+      Tags:
+          - Key: Name
+            Value: !Sub ${EnvironmentName} RDS Airports DB
+    DeletionPolicy: Delete
+  
+  #####################################################################################################################
+  # OUTPUTS
+  #####################################################################################################################
+
+Outputs:
+  EC2InitRDSInstancePublicDNS:
+    Description: "Public DNS of EC2 Instance to init RDS DB"
+    Value: !GetAtt EC2InitRDSInstance.PublicDnsName
+
+  EC2InitRDSInstancePublicIP:
+    Description: "Public IP of EC2 Instance to init RDS DB"
+    Value: !GetAtt EC2InitRDSInstance.PublicIp
+
+  AirportsDBEndpoint:
+    Description: "Connection endpoint for the Airports database"
+    Value: !GetAtt AirportsDBInstance.Endpoint.Address

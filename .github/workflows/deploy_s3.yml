@@ -1,0 +1,34 @@
+name: Deploy Airflow files on S3
+
+on:
+  push:
+    branches:
+    - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Deploy DAGs
+      uses: jakejarvis/s3-sync-action@master
+      with:
+        args: --acl private --follow-symlinks --delete --exclude '.git/*'
+      env:
+        AWS_S3_BUCKET: 'airflow-itba-tp.lucianonaveiro'
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: 'us-west-1'
+        SOURCE_DIR: 'airflow/dags'
+        DEST_DIR: 'dags'
+
+    - name: Deploy requirements.txt
+      uses: jakejarvis/s3-sync-action@master
+      with:
+        args: --acl private --follow-symlinks --exclude '.git/*'
+      env:
+        AWS_S3_BUCKET: 'airflow-itba-tp.lucianonaveiro'
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: 'us-west-1'
+        SOURCE_DIR: 'airflow/requirements'

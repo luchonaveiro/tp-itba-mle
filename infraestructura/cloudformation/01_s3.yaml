@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: TP-ITBA
+
+Resources:
+  #####################################################################################################################
+  # S3 Buckets
+  #####################################################################################################################
+
+  EnvironmentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: 'airflow-itba-tp.lucianonaveiro'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Managed Airflow
+
+  CloudformationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: 'com.lucianonaveiro.itba.tp.cloudformation'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} CloudFormation Templates
+
+  OutputPlotsBucket:
+    Type: 'AWS::S3::Bucket' 
+    Properties:
+      BucketName: com.lucianonaveiro.itba.tp.airport.plots
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} ETL Output Plots

@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: TP-ITBA
+    
+Resources:
+  #####################################################################################################################
+  # CREATE MWAA
+  #####################################################################################################################
+
+  MwaaEnvironment:
+    Type: AWS::MWAA::Environment
+    DependsOn: MwaaExecutionPolicy
+    Properties:
+      Name: !Sub airflow-${EnvironmentName}-MwaaEnvironment
+      SourceBucketArn: arn:aws:s3:::airflow-itba-tp.lucianonaveiro
+      ExecutionRoleArn: !GetAtt MwaaExecutionRole.Arn
+      DagS3Path: dags
+      RequirementsS3Path: requirements.txt
+      EnvironmentClass: mw1.medium
+      AirflowConfigurationOptions:
+        celery.sync_parallelism: 1
+        logging.logging_level: INFO
+      NetworkConfiguration:
+        SecurityGroupIds:
+          - !GetAtt SecurityGroup.GroupId
+        SubnetIds:
+          - !ImportValue PrivateSubnet1
+          - !ImportValue PrivateSubnet2
+      WebserverAccessMode: PUBLIC_ONLY
+      MaxWorkers: 2
+      LoggingConfiguration:
+        DagProcessingLogs:
+          LogLevel: INFO
+          Enabled: true
+        SchedulerLogs:
+          LogLevel: INFO
+          Enabled: true
+        TaskLogs:
+          LogLevel: INFO
+          Enabled: true
+        WorkerLogs:
+          LogLevel: INFO
+          Enabled: true
+        WebserverLogs:
+          LogLevel: INFO
+          Enabled: true
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !ImportValue VPC
+      GroupDescription: !Sub "Security Group for Amazon MWAA Environment ${EnvironmentName}-MwaaEnvironment"
+      GroupName: !Sub "airflow-security-group-${EnvironmentName}-MwaaEnvironment"
+  
+  SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref SecurityGroup
+
+  SecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: "-1"
+      CidrIp: "0.0.0.0/0"
+
+  MwaaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - airflow-env.amazonaws.com
+                - airflow.amazonaws.com
+            Action:
+             - "sts:AssumeRole"
+      Path: "/service-role/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
+
+  MwaaExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Roles:
+        - !Ref MwaaExecutionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: airflow:PublishMetrics
+            Resource:
+              - !Sub "arn:aws:airflow:${AWS::Region}:${AWS::AccountId}:environment/${EnvironmentName}"
+          - Effect: Deny
+            Action: s3:ListAllMyBuckets
+            Resource:
+              - arn:aws:s3:::airflow-itba-tp.lucianonaveiro
+              - "arn:aws:s3:::airflow-itba-tp.lucianonaveiro/*"
+              - arn:aws:s3:::com.lucianonaveiro.itba.tp.airport.plots
+              - "arn:aws:s3:::com.lucianonaveiro.itba.tp.airport.plots/*"
+          - Effect: Allow
+            Action:
+              - "s3:GetObject*"
+              - "s3:GetBucket*"
+              - "s3:List*"
+            Resource:
+              - arn:aws:s3:::airflow-itba-tp.lucianonaveiro
+              - "arn:aws:s3:::airflow-itba-tp.lucianonaveiro/*"
+              - arn:aws:s3:::com.lucianonaveiro.itba.tp.airport.plots
+              - "arn:aws:s3:::com.lucianonaveiro.itba.tp.airport.plots/*"
+          - Effect: Allow
+            Action:
+              - logs:DescribeLogGroups
+            Resource: "*"
+
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:CreateLogGroup
+              - logs:PutLogEvents
+              - logs:GetLogEvents
+              - logs:GetLogRecord
+              - logs:GetLogGroupFields
+              - logs:GetQueryResults
+              - logs:DescribeLogGroups
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:airflow-airflow-${EnvironmentName}-MwaaEnvironment*"
+          - Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - sqs:ChangeMessageVisibility
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+              - sqs:ReceiveMessage
+              - sqs:SendMessage
+            Resource:
+              - !Sub "arn:aws:sqs:${AWS::Region}:*:airflow-celery-*"
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - "kms:GenerateDataKey*"
+              - kms:Encrypt
+            NotResource: !Sub "arn:aws:kms:*:${AWS::AccountId}:key/*"
+            Condition:
+              StringLike:
+                "kms:ViaService":
+                  - !Sub "sqs.${AWS::Region}.amazonaws.com"
+
+  #####################################################################################################################
+  # OUTPUTS
+  #####################################################################################################################
+Outputs:
+  SecurityGroup:
+    Description: "MWAA Security Group"
+    Value: !Ref SecurityGroup
+    Export:
+      Name: SecurityGroup
+
+  MwaaApacheAirflowUI:
+    Description: MWAA Environment
+    Value: !Sub  "https://${MwaaEnvironment.WebserverUrl}"

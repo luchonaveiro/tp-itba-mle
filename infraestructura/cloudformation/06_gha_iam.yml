@@ -1,0 +1,39 @@
+Resources:
+  GHAUser:
+    Type: AWS::IAM::User
+    Properties:
+      Path: "/"
+      UserName: GithubActions
+
+  GHRole:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: GHStoS3
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:DeleteObject'
+
+            Resource:
+              - arn:aws:s3:::airflow-itba-tp.lucianonaveiro
+              - "arn:aws:s3:::airflow-itba-tp.lucianonaveiro/*"
+      Users:
+          - GithubActions
+
+  GHAUserAccessKeys:
+    Type: 'AWS::IAM::AccessKey'
+    Properties:
+      UserName: GithubActions
+
+Outputs:
+  AccessKeyformyaccesskey:
+    Value:
+      !Ref GHAUserAccessKeys
+  SecretKeyformyaccesskey:
+    Value: !GetAtt GHAUserAccessKeys.SecretAccessKey
