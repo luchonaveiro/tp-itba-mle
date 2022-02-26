@@ -181,3 +181,8 @@ $ aws cloudformation deploy \
 On the outputs pane of this stack, both the `ACCESS_KEY_ID` and the `SECRET_ACCESS_KEY` can be found. These two values are necessary to create the *Secrets* on GitHub Actions settings
 
 ![image](assets/github_actions.png)
+
+So, once the Github Action is triggered, we can see clearly how th DAGs and `requirements.txt` files are uploaded to S3
+
+
+![image](assets/github_actions_cicd.png)
