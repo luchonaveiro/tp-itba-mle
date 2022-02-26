@@ -5,7 +5,7 @@
 
 The objective of the following project is to build an ETL capable of processing the [Airlines Delay and Cancellation Data from 2009-2018](https://www.kaggle.com/yuanyuwendymu/airline-delay-and-cancellation-data-2009-2018?select=2009.csv), to detect the anomalies on the average of the daily departure delay for each airport.
 
-The ETL is developed using Apache Airflow which extracts the raw data from S3; process it, applies an ARIMA model, and stores the data on a database created on an RDS instance; where Apache Superset is connected to visualize the results. A scalable infrastructire is deployed to enable teh solution:
+The ETL is developed using Apache Airflow which extracts the raw data from S3; process it, applies an ARIMA model, and stores the data on a database created on an RDS instance; where Apache Superset is connected to visualize the results. A scalable infrastructire is deployed to enable the solution:
 - implementation of a [*Managed Workflows for Apache Airflow* environment (MWAA)](https://aws.amazon.com/managed-workflows-for-apache-airflow/), where the model will run to detect the airport's departure delya anomalies. To detect an anomaly, an [ARIMA](https://www.statsmodels.org/devel/generated/statsmodels.tsa.arima.model.ARIMA.html) model is used, and the threshold to split a normal observation of an anomaly, is a 80% confidence interval, calculated by the same ARIMA model.
 - deployment of a [PostgreSQL RDS instance](https://aws.amazon.com/rds/), where the daily summarized values are going to be stored.
 - deployment of [Apache Superset](https://superset.apache.org/), which we will connect to the database created on the RDS instance and generates a dahsboard to visualize:
@@ -167,7 +167,7 @@ When the dashboard is set up, I can filter the year 2013 and the *ANC* airport a
 ![image](assets/superset_results_2.png)
 
 ## **CI/CD**
-I also implemented a *CI/CD Pipeline* using GitHub Actions (the workflow named `deploy_s3.yml`), which on each pull and merge to the main branch, it uploads the `airflow/dags` directory and the `airflow/requirements.txt` file to the `airflow-itba-tp.lucianonaveiro` S3 bucket.
+I also implemented a *CI/CD Pipeline* using GitHub Actions (the workflow named `deploy_s3.yml`), which on each push and merge to the main branch, it uploads the `airflow/dags` directory and the `airflow/requirements.txt` file to the `airflow-itba-tp.lucianonaveiro` S3 bucket.
 
 To correctly implement this, I create an IAM User with an attached policy to be able to upload and delete files to the `airflow-itba-tp.lucianonaveiro` S3 bucket:
 
