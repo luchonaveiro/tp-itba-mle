@@ -26,11 +26,18 @@ First I create some S3 buckets, and copy my local files to AWS:
 - `com.lucianonaveiro.itba.tp.cloudformation`: where I store some large CloudFormation templates
 - `com.lucianonaveiro.itba.tp.airport.plots`: where I store the ouptut files from the ETL process executed by Apache Airflow
 
+To do that, I execute the following CloudFormation template
+
 ```
 $ aws cloudformation deploy \
   --stack-name TP-ITBA-S3 \
   --template-file cloudformation/01_s3.yaml
 
+```
+
+Once created, I copy my local files to S3
+
+```
 $ aws s3 cp --recursive airflow/dags s3://airflow-itba-tp.lucianonaveiro/dags/
 
 $ aws s3 cp airflow/requirements/requirements.txt s3://airflow-itba-tp.lucianonaveiro/requirements.txt
