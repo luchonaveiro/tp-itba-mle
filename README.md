@@ -193,3 +193,5 @@ So, once the Github Action is triggered, we can see clearly how th DAGs and `req
 
 
 ![image](assets/github_actions_cicd.png)
+
+The DAGs deployment has a special treatment, in which I first delete all the files on the bucket, and then upload the files
